@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import importlib.util
 import json
 import shutil
@@ -20,6 +21,8 @@ from .generation import (
     build_cvxgenrust,
     build_cvxpygen,
     cgr_dir,
+    cgr_python_package,
+    cgr_python_source_dir,
     cpg_dir,
     generate_all,
 )
@@ -110,7 +113,18 @@ def _run_cvxpy_direct(
 
 
 def _register_cgr(fixture: ProblemFixture, config: BenchmarkConfig, case: ProblemCase) -> None:
-    module = _load_module(cgr_dir(config, case.name) / "cgr_solver.py", f"{case.name}_cgr_solver")
+    package_name = cgr_python_package(config, case.name)
+    for module_name in list(sys.modules):
+        if module_name == package_name or module_name.startswith(f"{package_name}."):
+            sys.modules.pop(module_name, None)
+
+    python_source_dir = str(cgr_python_source_dir(config, case.name).resolve())
+    sys.path.insert(0, python_source_dir)
+    try:
+        module = importlib.import_module(f"{package_name}.cgr_solver")
+    finally:
+        if python_source_dir in sys.path:
+            sys.path.remove(python_source_dir)
     fixture.problem.register_solve("CGR", module.cgr_solve)
 
 

@@ -180,15 +180,22 @@ def _case(
     return ProblemCase(name, description, factory, family, size_label, size)
 
 
+def _size_case(
+    cases: dict[str, ProblemCase],
+    family: str,
+    label: str,
+    description_prefix: str,
+    size_text: str,
+    factory: Callable[[], ProblemFixture],
+    size: int,
+) -> None:
+    name = f"{family}_{label}"
+    cases[name] = _case(name, f"{description_prefix}, {size_text}", factory, family, label, size)
+
+
 CASES: dict[str, ProblemCase] = {
     "nnls": _case("nnls", "Nonnegative least squares QP", _nnls, "nnls", "small", 4),
-    "nnls_small": _case("nnls_small", "Nonnegative least squares QP, n=4", lambda: _nnls(8, 4), "nnls", "small", 4),
-    "nnls_medium": _case("nnls_medium", "Nonnegative least squares QP, n=8", lambda: _nnls(16, 8), "nnls", "medium", 8),
-    "nnls_large": _case("nnls_large", "Nonnegative least squares QP, n=16", lambda: _nnls(32, 16), "nnls", "large", 16),
     "box_qp": _case("box_qp", "Box-constrained equality QP", _box_qp, "box_qp", "small", 6),
-    "box_qp_small": _case("box_qp_small", "Box-constrained equality QP, n=6", lambda: _box_qp(6), "box_qp", "small", 6),
-    "box_qp_medium": _case("box_qp_medium", "Box-constrained equality QP, n=12", lambda: _box_qp(12), "box_qp", "medium", 12),
-    "box_qp_large": _case("box_qp_large", "Box-constrained equality QP, n=24", lambda: _box_qp(24), "box_qp", "large", 24),
     "parametric_quad_form": _case(
         "parametric_quad_form",
         "QP with PSD matrix parameter",
@@ -197,59 +204,62 @@ CASES: dict[str, ProblemCase] = {
         "small",
         4,
     ),
-    "parametric_quad_form_small": _case(
-        "parametric_quad_form_small",
-        "QP with PSD matrix parameter, n=4",
-        lambda: _parametric_quad_form(4),
-        "parametric_quad_form",
-        "small",
-        4,
-    ),
-    "parametric_quad_form_medium": _case(
-        "parametric_quad_form_medium",
-        "QP with PSD matrix parameter, n=8",
-        lambda: _parametric_quad_form(8),
-        "parametric_quad_form",
-        "medium",
-        8,
-    ),
-    "parametric_quad_form_large": _case(
-        "parametric_quad_form_large",
-        "QP with PSD matrix parameter, n=12",
-        lambda: _parametric_quad_form(12),
-        "parametric_quad_form",
-        "large",
-        12,
-    ),
     "socp": _case("socp", "Second-order cone least-squares problem", _socp, "socp", "small", 4),
-    "socp_small": _case("socp_small", "Second-order cone least-squares problem, n=4", lambda: _socp(8, 4), "socp", "small", 4),
-    "socp_medium": _case(
-        "socp_medium", "Second-order cone least-squares problem, n=8", lambda: _socp(16, 8), "socp", "medium", 8
-    ),
-    "socp_large": _case(
-        "socp_large", "Second-order cone least-squares problem, n=16", lambda: _socp(32, 16), "socp", "large", 16
-    ),
     "flow_lp": _case("flow_lp", "Small network-flow LP", _flow_lp, "flow_lp", "small", 2),
-    "flow_lp_small": _case("flow_lp_small", "Network-flow LP, commodities=2", lambda: _flow_lp(2), "flow_lp", "small", 2),
-    "flow_lp_medium": _case(
-        "flow_lp_medium", "Network-flow LP, commodities=4", lambda: _flow_lp(4), "flow_lp", "medium", 4
-    ),
-    "flow_lp_large": _case("flow_lp_large", "Network-flow LP, commodities=8", lambda: _flow_lp(8), "flow_lp", "large", 8),
     "mpc": _case("mpc", "Paper-inspired scalar MPC QP", _mpc, "mpc", "small", 6),
-    "mpc_small": _case("mpc_small", "Scalar MPC QP, horizon=6", lambda: _mpc(6), "mpc", "small", 6),
-    "mpc_medium": _case("mpc_medium", "Scalar MPC QP, horizon=12", lambda: _mpc(12), "mpc", "medium", 12),
-    "mpc_large": _case("mpc_large", "Scalar MPC QP, horizon=24", lambda: _mpc(24), "mpc", "large", 24),
     "portfolio": _case("portfolio", "Paper-inspired long-only portfolio QP", _portfolio, "portfolio", "small", 8),
-    "portfolio_small": _case(
-        "portfolio_small", "Long-only portfolio QP, n=8", lambda: _portfolio(8), "portfolio", "small", 8
-    ),
-    "portfolio_medium": _case(
-        "portfolio_medium", "Long-only portfolio QP, n=16", lambda: _portfolio(16), "portfolio", "medium", 16
-    ),
-    "portfolio_large": _case(
-        "portfolio_large", "Long-only portfolio QP, n=32", lambda: _portfolio(32), "portfolio", "large", 32
-    ),
 }
+
+for label, n in [("tiny", 2), ("small", 4), ("medium", 8), ("large", 16), ("xlarge", 32)]:
+    _size_case(CASES, "nnls", label, "Nonnegative least squares QP", f"n={n}", lambda n=n: _nnls(2 * n, n), n)
+    _size_case(
+        CASES,
+        "socp",
+        label,
+        "Second-order cone least-squares problem",
+        f"n={n}",
+        lambda n=n: _socp(2 * n, n),
+        n,
+    )
+
+for label, n in [("tiny", 3), ("small", 6), ("medium", 12), ("large", 24), ("xlarge", 48)]:
+    _size_case(CASES, "box_qp", label, "Box-constrained equality QP", f"n={n}", lambda n=n: _box_qp(n), n)
+
+for label, n in [("tiny", 2), ("small", 4), ("medium", 8), ("large", 12), ("xlarge", 16)]:
+    _size_case(
+        CASES,
+        "parametric_quad_form",
+        label,
+        "QP with PSD matrix parameter",
+        f"n={n}",
+        lambda n=n: _parametric_quad_form(n),
+        n,
+    )
+
+for label, commodities in [("tiny", 1), ("small", 2), ("medium", 4), ("large", 8), ("xlarge", 16)]:
+    _size_case(
+        CASES,
+        "flow_lp",
+        label,
+        "Network-flow LP",
+        f"commodities={commodities}",
+        lambda commodities=commodities: _flow_lp(commodities),
+        commodities,
+    )
+
+for label, horizon in [("tiny", 3), ("small", 6), ("medium", 12), ("large", 24), ("xlarge", 48)]:
+    _size_case(CASES, "mpc", label, "Scalar MPC QP", f"horizon={horizon}", lambda horizon=horizon: _mpc(horizon), horizon)
+
+for label, n in [("tiny", 4), ("small", 8), ("medium", 16), ("large", 32), ("xlarge", 64)]:
+    _size_case(
+        CASES,
+        "portfolio",
+        label,
+        "Long-only portfolio QP",
+        f"n={n}",
+        lambda n=n: _portfolio(n),
+        n,
+    )
 
 
 def selected_cases(names: tuple[str, ...] | list[str]) -> list[ProblemCase]:

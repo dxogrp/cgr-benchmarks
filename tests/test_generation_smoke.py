@@ -3,7 +3,13 @@ import os
 import pytest
 
 from cgr_benchmarks.config import BenchmarkConfig
-from cgr_benchmarks.generation import cgr_dir, cpg_dir, generate_all
+from cgr_benchmarks.generation import (
+    cgr_dir,
+    cgr_python_package,
+    cgr_python_source_dir,
+    cpg_dir,
+    generate_all,
+)
 
 
 pytestmark = pytest.mark.skipif(
@@ -36,5 +42,9 @@ def test_codegen_toolchain_generates_reference_problem(tmp_path, problem):
     config = _config(tmp_path, problem)
     generate_all(config, clean=True)
     assert (cgr_dir(config, problem) / "Cargo.toml").exists()
-    assert (cgr_dir(config, problem) / "cgr_solver.py").exists()
+    assert (
+        cgr_python_source_dir(config, problem)
+        / cgr_python_package(config, problem)
+        / "cgr_solver.py"
+    ).exists()
     assert (cpg_dir(config, problem) / "cpg_solver.py").exists()

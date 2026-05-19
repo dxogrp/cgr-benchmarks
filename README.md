@@ -77,9 +77,10 @@ the final benchmark tables.
 ## Outputs
 
 Generated solver projects and temporary build inputs are written under
-`artifacts/`. CVXPYgen projects are generated in `cpg_code` folders to avoid a
-Python import-name collision with the installed `cvxpygen` package. Benchmark
-outputs are written under `results/`:
+`artifacts/`. `cvxgenrust` projects are generated in `cgr_code` folders,
+and CVXPYgen projects are generated in `cpg_code` folders, to avoid Python
+import-name collisions with installed packages. Benchmark outputs are written under
+`results/`:
 
 - `solve_times.csv`
 - `solve_times.jsonl`
@@ -91,7 +92,7 @@ parameter update and wrapper overhead. Binary size is intentionally not reported
 the Rust and C/Python artifact boundaries are implementation-language dependent,
 so the benchmark focuses on solve latency.
 
-The default problem suite includes small, medium, and large variants for each
-problem family. Raw timing rows include `problem_family`, `size_label`, and
+The default problem suite includes tiny, small, medium, large, and xlarge variants
+for each problem family. Raw timing rows include `problem_family`, `size_label`, and
 `size` columns so scaling plots can compare solve time as problem dimensions
 grow.

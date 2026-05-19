@@ -13,7 +13,15 @@ from .problems import ProblemCase, selected_cases
 
 
 def cgr_dir(config: BenchmarkConfig, problem_name: str) -> Path:
-    return config.generated_dir / problem_name / "cvxgenrust"
+    return config.generated_dir / problem_name / "cgr_code"
+
+
+def cgr_python_source_dir(config: BenchmarkConfig, problem_name: str) -> Path:
+    return cgr_dir(config, problem_name) / "python"
+
+
+def cgr_python_package(config: BenchmarkConfig, problem_name: str) -> str:
+    return cgr_dir(config, problem_name).name
 
 
 def cpg_dir(config: BenchmarkConfig, problem_name: str) -> Path:
@@ -23,7 +31,7 @@ def cpg_dir(config: BenchmarkConfig, problem_name: str) -> Path:
 def generate_cvxgenrust(case: ProblemCase, output_dir: Path) -> None:
     fixture = case.factory()
     output_dir.mkdir(parents=True, exist_ok=True)
-    cgr.generate_code(fixture.problem, code_dir=output_dir, module_name=f"{case.name}_cgr")
+    cgr.generate_code(fixture.problem, code_dir=output_dir.resolve(), module_name=f"{case.name}_cgr")
 
 
 def generate_cvxpygen(case: ProblemCase, output_dir: Path, solver: str) -> None:
