@@ -1,0 +1,39 @@
+[project]
+name = "cgr-benchmarks"
+version = "0.1.0"
+description = "Benchmarks for cvxgenrust solve latency"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "cvxgenrust",
+    "cvxpy>=1.9",
+    "cvxpygen>=0.7",
+    "matplotlib>=3.9",
+    "numpy>=1.26",
+    "pandas>=2.2",
+    "pip>=25",
+    "scipy>=1.13",
+    "tabulate>=0.9",
+]
+
+[project.scripts]
+cgr-bench = "cgr_benchmarks.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+]
+
+[tool.uv.sources]
+cvxgenrust = { path = "../cvxgenrust", editable = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "reproducibility: fast checks for experiment configuration, problem definitions, and output schemas",
+    "toolchain: opt-in checks that generate and compile external solver code",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

@@ -1,0 +1,49 @@
+[benchmark]
+warmups = 3
+samples = 30
+seed = 1729
+enabled_problems = [
+  "nnls_small",
+  "nnls_medium",
+  "nnls_large",
+  "box_qp_small",
+  "box_qp_medium",
+  "box_qp_large",
+  "parametric_quad_form_small",
+  "parametric_quad_form_medium",
+  "parametric_quad_form_large",
+  "socp_small",
+  "socp_medium",
+  "socp_large",
+  "flow_lp_small",
+  "flow_lp_medium",
+  "flow_lp_large",
+  "mpc_small",
+  "mpc_medium",
+  "mpc_large",
+  "portfolio_small",
+  "portfolio_medium",
+  "portfolio_large",
+]
+enabled_tools = [
+  "cvxpy_direct",
+  "cgr_python",
+  "cgr_rust",
+  "cvxpygen",
+  "cvxpygen_c",
+]
+
+[paths]
+artifacts_dir = "artifacts"
+generated_dir = "artifacts/generated"
+results_dir = "results"
+
+[cvxpy]
+solver = "CLARABEL"
+
+[cvxpygen]
+solver = "CLARABEL"
+
+[rust]
+release = true
+strip = true
