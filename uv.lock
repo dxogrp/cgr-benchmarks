@@ -92,7 +92,7 @@ dev = [
 requires-dist = [
     { name = "cvxgenrust", editable = "../cvxgenrust" },
     { name = "cvxpy", specifier = ">=1.9" },
-    { name = "cvxpygen", specifier = ">=0.7" },
+    { name = "cvxpygen", specifier = ">=1.0" },
     { name = "matplotlib", specifier = ">=3.9" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "pandas", specifier = ">=2.2" },
