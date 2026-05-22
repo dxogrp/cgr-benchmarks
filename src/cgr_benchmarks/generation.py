@@ -4,6 +4,7 @@ import importlib
 import os
 import shutil
 import subprocess
+import tomllib
 from pathlib import Path
 
 import cvxgenrust as cgr
@@ -21,6 +22,12 @@ def cgr_python_source_dir(config: BenchmarkConfig, problem_name: str) -> Path:
 
 
 def cgr_python_package(config: BenchmarkConfig, problem_name: str) -> str:
+    pyproject_path = cgr_dir(config, problem_name) / "pyproject.toml"
+    if pyproject_path.exists():
+        data = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
+        module_name = data.get("tool", {}).get("maturin", {}).get("module-name")
+        if isinstance(module_name, str) and "." in module_name:
+            return module_name.split(".", 1)[0]
     return cgr_dir(config, problem_name).name
 
 
@@ -76,4 +83,3 @@ def build_cvxpygen(config: BenchmarkConfig, case: ProblemCase) -> None:
         "spec.loader.exec_module(module)\n"
     )
     subprocess.run(["python", "-c", script], check=True)
-
