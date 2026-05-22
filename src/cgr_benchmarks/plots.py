@@ -53,6 +53,46 @@ def _save_size_plot(frame: pd.DataFrame, path: Path) -> None:
     plt.close(fig)
 
 
+def _save_solution_error_plot(frame: pd.DataFrame, path: Path) -> None:
+    if frame.empty:
+        return
+    plot_frame = frame.copy()
+    plot_frame["plot_error"] = plot_frame["rel_solution_error"].clip(lower=1e-16)
+    pivot = plot_frame.pivot(index="problem", columns="tool", values="plot_error")
+    ax = pivot.plot(kind="bar", figsize=(10, 5), width=0.82)
+    ax.set_title("Relative Solution Error vs CVXPY")
+    ax.set_xlabel("")
+    ax.set_ylabel("median relative solution error")
+    ax.set_yscale("log")
+    ax.grid(axis="y", alpha=0.25)
+    ax.legend(title="")
+    plt.xticks(rotation=30, ha="right")
+    plt.tight_layout()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(path, dpi=180)
+    plt.close()
+
+
+def _save_objective_error_plot(frame: pd.DataFrame, path: Path) -> None:
+    if frame.empty:
+        return
+    plot_frame = frame.copy()
+    plot_frame["plot_error"] = plot_frame["rel_objective_error"].clip(lower=1e-16)
+    pivot = plot_frame.pivot(index="problem", columns="tool", values="plot_error")
+    ax = pivot.plot(kind="bar", figsize=(10, 5), width=0.82)
+    ax.set_title("Relative Objective Error vs CVXPY")
+    ax.set_xlabel("")
+    ax.set_ylabel("median relative objective error")
+    ax.set_yscale("log")
+    ax.grid(axis="y", alpha=0.25)
+    ax.legend(title="")
+    plt.xticks(rotation=30, ha="right")
+    plt.tight_layout()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(path, dpi=180)
+    plt.close()
+
+
 def write_plots(config: BenchmarkConfig) -> list[Path]:
     plot_dir = config.results_dir / "plots"
     written: list[Path] = []
@@ -73,5 +113,27 @@ def write_plots(config: BenchmarkConfig) -> list[Path]:
                 path = plot_dir / "solve_time_by_size_seconds.png"
                 _save_size_plot(size_summary, path)
                 written.append(path)
+            if {"problem", "tool", "rel_solution_error"}.issubset(solve.columns):
+                solution_error = solve.dropna(subset=["rel_solution_error"])
+                if not solution_error.empty:
+                    solution_error_summary = (
+                        solution_error.groupby(["problem", "tool"], dropna=False)["rel_solution_error"]
+                        .median()
+                        .reset_index()
+                    )
+                    path = plot_dir / "solution_error_median_relative.png"
+                    _save_solution_error_plot(solution_error_summary, path)
+                    written.append(path)
+            if {"problem", "tool", "rel_objective_error"}.issubset(solve.columns):
+                objective_error = solve.dropna(subset=["rel_objective_error"])
+                if not objective_error.empty:
+                    objective_error_summary = (
+                        objective_error.groupby(["problem", "tool"], dropna=False)["rel_objective_error"]
+                        .median()
+                        .reset_index()
+                    )
+                    path = plot_dir / "objective_error_median_relative.png"
+                    _save_objective_error_plot(objective_error_summary, path)
+                    written.append(path)
 
     return written

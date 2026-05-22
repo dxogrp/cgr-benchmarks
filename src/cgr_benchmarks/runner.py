@@ -273,10 +273,14 @@ def _run_registered(
     )
 
 
-def _write_cgr_rust_driver(config: BenchmarkConfig, case: ProblemCase) -> Path:
+def _write_cgr_rust_driver(config: BenchmarkConfig, case: ProblemCase, fixture: ProblemFixture) -> Path:
     driver_dir = config.artifacts_dir / "rust_drivers" / case.name
     driver_dir.mkdir(parents=True, exist_ok=True)
     crate_dir = cgr_dir(config, case.name).resolve()
+    solution_extract_lines = [
+        f"        solution_values.extend(problem.extract_variable({json.dumps(name)}, &solution.x)?);"
+        for name in fixture.variables
+    ]
     (driver_dir / "Cargo.toml").write_text(
         "\n".join(
             [
@@ -304,7 +308,7 @@ def _write_cgr_rust_driver(config: BenchmarkConfig, case: ProblemCase) -> Path:
                 "fn main() -> Result<(), Box<dyn std::error::Error>> {",
                 "    let path = env::args().nth(1).ok_or(\"missing sample file path\")?;",
                 "    let text = fs::read_to_string(path)?;",
-                "    println!(\"sample,status,objective,seconds\");",
+                "    println!(\"sample,status,objective,seconds,solution\");",
                 "    for (sample, line) in text.lines().enumerate() {",
                 "        if line.trim().is_empty() {",
                 "            continue;",
@@ -322,7 +326,17 @@ def _write_cgr_rust_driver(config: BenchmarkConfig, case: ProblemCase) -> Path:
                 "        }",
                 "        let solution = problem.solve()?;",
                 "        let seconds = start.elapsed().as_secs_f64();",
-                "        println!(\"{},{},{},{}\", sample, solution.status, solution.obj_val, seconds);",
+                "        let mut solution_values = Vec::new();",
+                *solution_extract_lines,
+                "        let solution_text = solution_values",
+                "            .iter()",
+                "            .map(|value| value.to_string())",
+                "            .collect::<Vec<_>>()",
+                "            .join(\"|\");",
+                "        println!(",
+                "            \"{},{},{},{},{}\",",
+                "            sample, solution.status, solution.obj_val, seconds, solution_text",
+                "        );",
                 "    }",
                 "    Ok(())",
                 "}",
@@ -334,8 +348,8 @@ def _write_cgr_rust_driver(config: BenchmarkConfig, case: ProblemCase) -> Path:
     return driver_dir
 
 
-def _build_cgr_rust_driver(config: BenchmarkConfig, case: ProblemCase) -> Path:
-    driver_dir = _write_cgr_rust_driver(config, case)
+def _build_cgr_rust_driver(config: BenchmarkConfig, case: ProblemCase, fixture: ProblemFixture) -> Path:
+    driver_dir = _write_cgr_rust_driver(config, case, fixture)
     cmd = ["cargo", "build", "--manifest-path", str(driver_dir / "Cargo.toml")]
     if config.rust_release:
         cmd.append("--release")
@@ -380,12 +394,16 @@ def _write_cgr_rust_samples(
     return sample_path
 
 
-def _run_cgr_rust_sample_file(executable: Path, sample_path: Path) -> list[tuple[int, float | None, str, float]]:
+def _run_cgr_rust_sample_file(
+    executable: Path,
+    sample_path: Path,
+) -> list[tuple[int, float | None, str, float, list[float] | None]]:
     result = subprocess.run([str(executable), str(sample_path)], check=True, capture_output=True, text=True)
     rows = []
     for line in result.stdout.splitlines()[1:]:
-        sample_text, status, objective_text, seconds_text = line.split(",", 3)
-        rows.append((int(sample_text), float(objective_text), status, float(seconds_text)))
+        sample_text, status, objective_text, seconds_text, solution_text = line.split(",", 4)
+        solution = [float(value) for value in solution_text.split("|") if value]
+        rows.append((int(sample_text), float(objective_text), status, float(seconds_text), solution or None))
     return rows
 
 
@@ -620,32 +638,38 @@ def _run_tool_samples(
             )
         return records
     elif tool == "cgr_rust":
-        executable = _build_cgr_rust_driver(config, case)
+        executable = _build_cgr_rust_driver(config, case, fixture)
         warmup_values = values_by_sample[: config.warmups]
         sample_path = _write_cgr_rust_samples(config, case, fixture, warmup_values + values_by_sample)
         try:
             rows = _run_cgr_rust_sample_file(executable, sample_path)
         except Exception as exc:
             return [_record_failure(case.name, tool, index, exc) for index in range(len(values_by_sample))]
-        return [
-            SolveRecord(
-                case.name,
-                case.family,
-                case.size_label,
-                case.size,
-                tool,
-                sample - config.warmups,
-                seconds,
-                status,
-                objective,
-                None,
-                _relative_error(objective, references[sample - config.warmups][0]),
-                None,
-                None,
+        records = []
+        for sample, objective, status, seconds, solution in rows:
+            if sample < config.warmups:
+                continue
+            sample_index = sample - config.warmups
+            reference_objective, reference_solution = references[sample_index]
+            solution_array = np.asarray(solution) if solution is not None else None
+            records.append(
+                SolveRecord(
+                    case.name,
+                    case.family,
+                    case.size_label,
+                    case.size,
+                    tool,
+                    sample_index,
+                    seconds,
+                    status,
+                    objective,
+                    None,
+                    _relative_error(objective, reference_objective),
+                    _relative_vector_error(solution_array, reference_solution),
+                    None,
+                )
             )
-            for sample, objective, status, seconds in rows
-            if sample >= config.warmups
-        ]
+        return records
     elif tool == "cvxpygen_c":
         executable = _build_cvxpygen_c_driver(config, case, fixture)
         warmup_values = values_by_sample[: config.warmups]
