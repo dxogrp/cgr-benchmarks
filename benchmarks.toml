@@ -57,6 +57,11 @@ enabled_tools = [
   "cvxpygen_c",
 ]
 
+[tool_skips]
+parametric_quad_form = ["cvxpygen", "cvxpygen_c"]
+trace_sdp = ["cvxpygen", "cvxpygen_c"]
+covariance_sdp = ["cvxpygen", "cvxpygen_c"]
+
 [paths]
 artifacts_dir = "artifacts"
 generated_dir = "artifacts/generated"

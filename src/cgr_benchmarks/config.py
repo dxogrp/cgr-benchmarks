@@ -13,6 +13,7 @@ class BenchmarkConfig:
     seed: int
     enabled_problems: tuple[str, ...]
     enabled_tools: tuple[str, ...]
+    tool_skips: dict[str, tuple[str, ...]]
     artifacts_dir: Path
     generated_dir: Path
     results_dir: Path
@@ -28,6 +29,10 @@ class BenchmarkConfig:
         cvxpy = data.get("cvxpy", {})
         cvxpygen = data.get("cvxpygen", {})
         rust = data.get("rust", {})
+        tool_skips = {
+            str(name): tuple(str(tool) for tool in tools)
+            for name, tools in data.get("tool_skips", {}).items()
+        }
         return cls(
             path=path,
             warmups=int(benchmark.get("warmups", 3)),
@@ -35,6 +40,7 @@ class BenchmarkConfig:
             seed=int(benchmark.get("seed", 1729)),
             enabled_problems=tuple(benchmark.get("enabled_problems", [])),
             enabled_tools=tuple(benchmark.get("enabled_tools", [])),
+            tool_skips=tool_skips,
             artifacts_dir=Path(paths.get("artifacts_dir", "artifacts")),
             generated_dir=Path(paths.get("generated_dir", "artifacts/generated")),
             results_dir=Path(paths.get("results_dir", "results")),
@@ -43,3 +49,7 @@ class BenchmarkConfig:
             rust_release=bool(rust.get("release", True)),
         )
 
+
+    def enabled_tools_for(self, problem_name: str, problem_family: str) -> tuple[str, ...]:
+        skipped = set(self.tool_skips.get(problem_family, ())) | set(self.tool_skips.get(problem_name, ()))
+        return tuple(tool for tool in self.enabled_tools if tool not in skipped)

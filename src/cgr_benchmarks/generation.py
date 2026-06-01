@@ -57,9 +57,10 @@ def generate_all(config: BenchmarkConfig, clean: bool = False) -> None:
     if clean and config.generated_dir.exists():
         shutil.rmtree(config.generated_dir)
     for case in selected_cases(config.enabled_problems):
-        if "cgr_python" in config.enabled_tools or "cgr_rust" in config.enabled_tools:
+        tools = config.enabled_tools_for(case.name, case.family)
+        if "cgr_python" in tools or "cgr_rust" in tools:
             generate_cvxgenrust(case, cgr_dir(config, case.name))
-        if "cvxpygen" in config.enabled_tools or "cvxpygen_c" in config.enabled_tools:
+        if "cvxpygen" in tools or "cvxpygen_c" in tools:
             generate_cvxpygen(case, cpg_dir(config, case.name), config.cvxpygen_solver)
 
 

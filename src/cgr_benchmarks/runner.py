@@ -795,9 +795,10 @@ def run_benchmarks(config: BenchmarkConfig, generate: bool = True) -> None:
     write_metadata(config.results_dir)
     cases = selected_cases(config.enabled_problems)
     for case in cases:
-        if "cgr_python" in config.enabled_tools or "cgr_rust" in config.enabled_tools:
+        tools = config.enabled_tools_for(case.name, case.family)
+        if "cgr_python" in tools or "cgr_rust" in tools:
             build_cvxgenrust(config, case)
-        if "cvxpygen" in config.enabled_tools or "cvxpygen_c" in config.enabled_tools:
+        if "cvxpygen" in tools or "cvxpygen_c" in tools:
             build_cvxpygen(config, case)
     rng = np.random.default_rng(config.seed)
     solve_records: list[SolveRecord] = []
@@ -805,9 +806,10 @@ def run_benchmarks(config: BenchmarkConfig, generate: bool = True) -> None:
         fixture = case.factory()
         values = [fixture.sample_parameters(rng, index) for index in range(config.samples)]
         reference_records, references = _reference_samples(config, case, values)
-        if "cvxpy_direct" in config.enabled_tools:
+        tools = config.enabled_tools_for(case.name, case.family)
+        if "cvxpy_direct" in tools:
             solve_records.extend(reference_records)
-        for tool in config.enabled_tools:
+        for tool in tools:
             if tool == "cvxpy_direct":
                 continue
             solve_records.extend(_run_tool_samples(config, case, tool, references, values))
