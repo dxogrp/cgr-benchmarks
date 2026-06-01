@@ -361,8 +361,9 @@ def _build_cgr_rust_driver(config: BenchmarkConfig, case: ProblemCase, fixture: 
 def _flatten_for_cgr_rust(name: str, value: np.ndarray | float, fixture: ProblemFixture) -> list[float]:
     parameter = fixture.parameters[name]
     array = np.asarray(value)
+    attributes = getattr(parameter, "attributes", {})
     if (
-        bool(getattr(parameter, "attributes", {}).get("PSD"))
+        any(bool(attributes.get(name)) for name in ("symmetric", "PSD", "NSD"))
         and len(parameter.shape) == 2
         and parameter.shape[0] == parameter.shape[1]
     ):

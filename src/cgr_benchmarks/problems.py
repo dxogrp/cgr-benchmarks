@@ -169,6 +169,52 @@ def _portfolio(n: int = 8) -> ProblemFixture:
     return ProblemFixture(problem, {"w": w}, parameters, sample)
 
 
+def _trace_sdp(n: int = 3) -> ProblemFixture:
+    x = cp.Variable((n, n), symmetric=True, name="X")
+    c = cp.Parameter((n, n), symmetric=True, name="C")
+    problem = cp.Problem(
+        cp.Minimize(cp.sum(cp.multiply(c, x))),
+        [x >> 0, cp.trace(x) == 1],
+    )
+
+    def sample(rng: np.random.Generator, _: int) -> dict[str, np.ndarray]:
+        raw = rng.normal(size=(n, n))
+        matrix = 0.5 * (raw + raw.T)
+        matrix += np.diag(np.linspace(0.0, 0.25, n))
+        return {"C": matrix}
+
+    parameters = {"C": c}
+    _assign(parameters, sample(np.random.default_rng(8), 0))
+    return ProblemFixture(problem, {"X": x}, parameters, sample)
+
+
+def _covariance_sdp(n: int = 3) -> ProblemFixture:
+    sigma = cp.Variable((n, n), symmetric=True, name="Sigma")
+    sample_covariance = cp.Parameter((n, n), symmetric=True, name="S")
+    diagonal_target = cp.diag(cp.diag(sample_covariance))
+    problem = cp.Problem(
+        cp.Minimize(
+            cp.sum_squares(sigma - sample_covariance)
+            + 0.15 * cp.sum_squares(sigma - diagonal_target)
+        ),
+        [sigma >> 0, cp.diag(sigma) == cp.diag(sample_covariance)],
+    )
+
+    def sample(rng: np.random.Generator, _: int) -> dict[str, np.ndarray]:
+        factor_count = max(1, min(3, n))
+        factors = rng.normal(size=(n, factor_count))
+        base = factors @ factors.T / factor_count
+        noise = rng.normal(scale=0.35, size=(n, n))
+        matrix = base + 0.5 * (noise + noise.T)
+        diagonal = np.diag(base) + rng.uniform(0.2, 0.8, size=n)
+        np.fill_diagonal(matrix, diagonal)
+        return {"S": matrix}
+
+    parameters = {"S": sample_covariance}
+    _assign(parameters, sample(np.random.default_rng(9), 0))
+    return ProblemFixture(problem, {"Sigma": sigma}, parameters, sample)
+
+
 def _case(
     name: str,
     description: str,
@@ -205,6 +251,15 @@ CASES: dict[str, ProblemCase] = {
         4,
     ),
     "socp": _case("socp", "Second-order cone least-squares problem", _socp, "socp", "small", 4),
+    "trace_sdp": _case("trace_sdp", "Trace-normalized semidefinite program", _trace_sdp, "trace_sdp", "small", 3),
+    "covariance_sdp": _case(
+        "covariance_sdp",
+        "Shrinkage covariance estimation SDP",
+        _covariance_sdp,
+        "covariance_sdp",
+        "small",
+        3,
+    ),
     "flow_lp": _case("flow_lp", "Small network-flow LP", _flow_lp, "flow_lp", "small", 2),
     "mpc": _case("mpc", "Paper-inspired scalar MPC QP", _mpc, "mpc", "small", 6),
     "portfolio": _case("portfolio", "Paper-inspired long-only portfolio QP", _portfolio, "portfolio", "small", 8),
@@ -233,6 +288,28 @@ for label, n in [("tiny", 2), ("small", 4), ("medium", 8), ("large", 12), ("xlar
         "QP with PSD matrix parameter",
         f"n={n}",
         lambda n=n: _parametric_quad_form(n),
+        n,
+    )
+
+for label, n in [("tiny", 2), ("small", 3), ("medium", 4), ("large", 6), ("xlarge", 8)]:
+    _size_case(
+        CASES,
+        "trace_sdp",
+        label,
+        "Trace-normalized semidefinite program",
+        f"n={n}",
+        lambda n=n: _trace_sdp(n),
+        n,
+    )
+
+for label, n in [("tiny", 2), ("small", 3), ("medium", 4), ("large", 6), ("xlarge", 8)]:
+    _size_case(
+        CASES,
+        "covariance_sdp",
+        label,
+        "Shrinkage covariance estimation SDP",
+        f"n={n}",
+        lambda n=n: _covariance_sdp(n),
         n,
     )
 
