@@ -315,7 +315,6 @@ def _write_cgr_rust_driver(config: BenchmarkConfig, case: ProblemCase, fixture: 
                 "            continue;",
                 "        }",
                 "        let mut problem = CGRProblem::new();",
-                "        let start = Instant::now();",
                 "        for assignment in line.split(';') {",
                 "            let Some((name, values_text)) = assignment.split_once('=') else { continue; };",
                 "            let values: Result<Vec<f64>, _> = values_text",
@@ -325,6 +324,7 @@ def _write_cgr_rust_driver(config: BenchmarkConfig, case: ProblemCase, fixture: 
                 "                .collect();",
                 "            problem.set_parameter(name, &values?)?;",
                 "        }",
+                "        let start = Instant::now();",
                 "        let solution = problem.solve()?;",
                 "        let seconds = start.elapsed().as_secs_f64();",
                 "        let mut solution_values = Vec::new();",
@@ -502,13 +502,13 @@ int main(int argc, char **argv) {{
         }}
         struct timespec start;
         struct timespec end;
-        clock_gettime(CLOCK_MONOTONIC, &start);
         char *assignment_state = NULL;
         char *assignment = strtok_r(line, ";", &assignment_state);
         while (assignment != NULL) {{
             apply_assignment(assignment);
             assignment = strtok_r(NULL, ";", &assignment_state);
         }}
+        clock_gettime(CLOCK_MONOTONIC, &start);
         cpg_solve();
         clock_gettime(CLOCK_MONOTONIC, &end);
         printf("%zu,%lu,%.17g,%.17g,",
