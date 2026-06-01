@@ -19,7 +19,6 @@ class BenchmarkConfig:
     cvxpy_solver: str
     cvxpygen_solver: str
     rust_release: bool
-    strip_artifacts: bool
 
     @classmethod
     def load(cls, path: Path) -> "BenchmarkConfig":
@@ -42,6 +41,5 @@ class BenchmarkConfig:
             cvxpy_solver=str(cvxpy.get("solver", "CLARABEL")),
             cvxpygen_solver=str(cvxpygen.get("solver", "CLARABEL")),
             rust_release=bool(rust.get("release", True)),
-            strip_artifacts=bool(rust.get("strip", True)),
         )
 

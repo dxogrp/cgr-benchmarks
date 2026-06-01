@@ -33,7 +33,6 @@ def _config(tmp_path, problem):
         cvxpy_solver="CLARABEL",
         cvxpygen_solver="CLARABEL",
         rust_release=True,
-        strip_artifacts=True,
     )
 
 

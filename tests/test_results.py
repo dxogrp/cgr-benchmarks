@@ -23,7 +23,6 @@ def test_experiment_result_schema_and_report_are_stable(tmp_path):
         cvxpy_solver="CLARABEL",
         cvxpygen_solver="CLARABEL",
         rust_release=True,
-        strip_artifacts=True,
     )
     _write_records(
         config,

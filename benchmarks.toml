@@ -1,7 +1,7 @@
 [benchmark]
 warmups = 3
 samples = 30
-seed = 1729
+seed = 10015
 enabled_problems = [
   "nnls_tiny",
   "nnls_small",
@@ -60,4 +60,3 @@ solver = "CLARABEL"
 
 [rust]
 release = true
-strip = true
