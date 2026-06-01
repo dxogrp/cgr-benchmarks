@@ -784,9 +784,6 @@ def _write_records(config: BenchmarkConfig, solve_records: list[SolveRecord]) ->
     config.results_dir.mkdir(parents=True, exist_ok=True)
     rows = [asdict(record) for record in solve_records]
     pd.DataFrame(rows).to_csv(config.results_dir / "solve_times.csv", index=False)
-    with (config.results_dir / "solve_times.jsonl").open("w", encoding="utf-8") as handle:
-        for row in rows:
-            handle.write(json.dumps(row, sort_keys=True) + "\n")
 
 
 def run_benchmarks(config: BenchmarkConfig, generate: bool = True) -> None:
