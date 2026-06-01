@@ -6,24 +6,13 @@ CONFIG ?= benchmarks.toml
 RESULT_REL_TOL ?= 1e-4
 ALLOW_RESULT_ERRORS ?= 0
 CGR_BENCH := uv run cgr-bench --config $(CONFIG)
-PYTEST := uv run pytest
 
 .DEFAULT_GOAL := help
 
 .PHONY: sync
-sync: ## install the default development environment
-	@printf "$(BLUE)Syncing development dependencies...$(RESET)\n"
-	@uv sync --frozen --group dev
-
-.PHONY: test
-test: sync ## run the fast reproducibility test suite
-	@printf "$(BLUE)Running fast tests...$(RESET)\n"
-	@$(PYTEST) -q
-
-.PHONY: test-toolchain
-test-toolchain: sync ## run opt-in code-generation smoke tests
-	@printf "$(BLUE)Running toolchain smoke tests...$(RESET)\n"
-	@CGR_BENCH_RUN_GENERATION_SMOKE=1 $(PYTEST) tests/test_generation_smoke.py -q
+sync: ## install the benchmark environment
+	@printf "$(BLUE)Syncing dependencies...$(RESET)\n"
+	@uv sync --frozen
 
 .PHONY: generate
 generate: sync ## generate cvxgenrust and CVXPYgen projects
@@ -58,15 +47,15 @@ plot: sync ## write PNG plots from existing results
 .PHONY: check-results
 check-results: sync ## validate result files, row counts, errors, and objective tolerances
 	@printf "$(BLUE)Checking benchmark results...$(RESET)\n"
-	@uv run python -c "from pathlib import Path; import pandas as pd; from cgr_benchmarks.config import BenchmarkConfig; config = BenchmarkConfig.load(Path('$(CONFIG)')); path = config.results_dir / 'solve_times.csv'; assert path.exists(), f'missing result file: {path}'; frame = pd.read_csv(path); expected_cols = ['problem', 'problem_family', 'size_label', 'size', 'tool', 'sample', 'seconds', 'status', 'objective', 'iterations', 'rel_objective_error', 'rel_solution_error', 'error']; assert list(frame.columns) == expected_cols, f'unexpected columns: {list(frame.columns)}'; expected_rows = config.samples * len(config.enabled_problems) * len(config.enabled_tools); assert len(frame) == expected_rows, f'expected {expected_rows} rows, found {len(frame)}'; failed = frame[frame['error'].notna() | (frame['status'] == 'error')]; allow_errors = '$(ALLOW_RESULT_ERRORS)' == '1'; assert allow_errors or failed.empty, failed[['problem', 'tool', 'sample', 'error']].to_string(index=False); rel = frame.loc[frame['tool'] != 'cvxpy_direct', 'rel_objective_error'].dropna(); tol = float('$(RESULT_REL_TOL)'); assert rel.empty or float(rel.max()) <= tol, f'max rel_objective_error {float(rel.max())} exceeds {tol}'; summary = config.results_dir / 'summary.md'; assert summary.exists(), f'missing summary file: {summary}'; suffix = f' ({len(failed)} rows with recorded errors allowed)' if allow_errors and not failed.empty else ''; print(f'checked {len(frame)} rows in {path}{suffix}')"
+	@uv run python -c "from pathlib import Path; import pandas as pd; from cgr_benchmarks.config import BenchmarkConfig; from cgr_benchmarks.status import is_success_status; config = BenchmarkConfig.load(Path('$(CONFIG)')); path = config.results_dir / 'solve_times.csv'; assert path.exists(), f'missing result file: {path}'; frame = pd.read_csv(path); expected_cols = ['problem', 'problem_family', 'size_label', 'size', 'tool', 'sample', 'seconds', 'status', 'objective', 'iterations', 'rel_objective_error', 'rel_solution_error', 'error']; assert list(frame.columns) == expected_cols, f'unexpected columns: {list(frame.columns)}'; expected_rows = config.samples * len(config.enabled_problems) * len(config.enabled_tools); assert len(frame) == expected_rows, f'expected {expected_rows} rows, found {len(frame)}'; failed = frame[frame['error'].notna() | ~frame['status'].map(is_success_status)]; allow_errors = '$(ALLOW_RESULT_ERRORS)' == '1'; assert allow_errors or failed.empty, failed[['problem', 'tool', 'sample', 'error']].to_string(index=False); rel = frame.loc[frame['tool'] != 'cvxpy_direct', 'rel_objective_error'].dropna(); tol = float('$(RESULT_REL_TOL)'); assert rel.empty or float(rel.max()) <= tol, f'max rel_objective_error {float(rel.max())} exceeds {tol}'; summary = config.results_dir / 'summary.md'; assert summary.exists(), f'missing summary file: {summary}'; suffix = f' ({len(failed)} rows with recorded errors allowed)' if allow_errors and not failed.empty else ''; print(f'checked {len(frame)} rows in {path}{suffix}')"
 
 .PHONY: experiment
 experiment: run check-results ## run the full experiment and validate its outputs
 
 .PHONY: clean
-clean: ## remove local benchmark and test artifacts
+clean: ## remove local benchmark artifacts
 	@printf "$(BLUE)Cleaning local artifacts...$(RESET)\n"
-	@rm -rf artifacts results .pytest_cache
+	@rm -rf artifacts results
 
 .PHONY: help
 help: ## display this help message

@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 from .config import BenchmarkConfig
+from .status import successful_solve_rows
 
 
 def _save_bar_plot(frame: pd.DataFrame, x: str, y: str, hue: str, title: str, ylabel: str, path: Path) -> None:
@@ -99,8 +100,7 @@ def write_plots(config: BenchmarkConfig) -> list[Path]:
 
     solve_path = config.results_dir / "solve_times.csv"
     if solve_path.exists():
-        solve = pd.read_csv(solve_path)
-        solve = solve[solve["error"].isna()] if "error" in solve.columns else solve
+        solve = successful_solve_rows(pd.read_csv(solve_path))
         if not solve.empty:
             summary = solve.groupby(["problem", "tool"], dropna=False)["seconds"].median().reset_index()
             path = plot_dir / "solve_time_median_seconds.png"

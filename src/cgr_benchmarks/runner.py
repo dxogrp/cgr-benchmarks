@@ -28,6 +28,7 @@ from .generation import (
 )
 from .problems import ProblemCase, ProblemFixture, selected_cases
 from .report import write_report
+from .status import status_error
 
 
 @dataclass(frozen=True)
@@ -432,6 +433,19 @@ def _write_cvxpygen_c_driver(config: BenchmarkConfig, case: ProblemCase, fixture
             {call}
         }}"""
         )
+    solution_extract_lines = []
+    for name, variable in fixture.variables.items():
+        ident = _c_ident(name)
+        size = int(variable.size)
+        solution_extract_lines.append(
+            f"""        for (size_t value_index = 0; value_index < {size}; value_index++) {{
+            if (wrote_solution) {{
+                printf("|");
+            }}
+            printf("%.17g", (double)CPG_Result.prim->{ident}[value_index]);
+            wrote_solution = 1;
+        }}"""
+        )
     driver_c = f"""
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
@@ -477,7 +491,7 @@ int main(int argc, char **argv) {{
     }}
     cpg_set_solver_default_settings();
     cpg_set_solver_verbose(0);
-    printf("sample,status,objective,seconds\\n");
+    printf("sample,status,objective,seconds,solution\\n");
     char line[65536];
     size_t sample = 0;
     while (fgets(line, sizeof(line), file)) {{
@@ -496,11 +510,14 @@ int main(int argc, char **argv) {{
         }}
         cpg_solve();
         clock_gettime(CLOCK_MONOTONIC, &end);
-        printf("%zu,%lu,%.17g,%.17g\\n",
+        printf("%zu,%lu,%.17g,%.17g,",
                sample,
                (unsigned long)CPG_Result.info->status,
                (double)CPG_Result.info->obj_val,
                elapsed_seconds(start, end));
+        int wrote_solution = 0;
+{chr(10).join(solution_extract_lines)}
+        printf("\\n");
         sample++;
     }}
     fclose(file);
@@ -567,12 +584,16 @@ def _write_cvxpygen_c_samples(
     return sample_path
 
 
-def _run_cvxpygen_c_sample_file(executable: Path, sample_path: Path) -> list[tuple[int, float | None, str, float]]:
+def _run_cvxpygen_c_sample_file(
+    executable: Path,
+    sample_path: Path,
+) -> list[tuple[int, float | None, str, float, list[float] | None]]:
     result = subprocess.run([str(executable), str(sample_path)], check=True, capture_output=True, text=True)
     rows = []
     for line in result.stdout.splitlines()[1:]:
-        sample_text, status, objective_text, seconds_text = line.split(",", 3)
-        rows.append((int(sample_text), float(objective_text), status, float(seconds_text)))
+        sample_text, status, objective_text, seconds_text, solution_text = line.split(",", 4)
+        solution = [float(value) for value in solution_text.split("|") if value]
+        rows.append((int(sample_text), float(objective_text), status, float(seconds_text), solution or None))
     return rows
 
 
@@ -633,7 +654,7 @@ def _run_tool_samples(
                     iterations,
                     _relative_error(objective, reference_objective),
                     _relative_vector_error(solution_array, reference_solution),
-                    error,
+                    error or status_error(status),
                 )
             )
         return records
@@ -666,7 +687,7 @@ def _run_tool_samples(
                     None,
                     _relative_error(objective, reference_objective),
                     _relative_vector_error(solution_array, reference_solution),
-                    None,
+                    status_error(status),
                 )
             )
         return records
@@ -678,25 +699,31 @@ def _run_tool_samples(
             rows = _run_cvxpygen_c_sample_file(executable, sample_path)
         except Exception as exc:
             return [_record_failure(case.name, tool, index, exc) for index in range(len(values_by_sample))]
-        return [
-            SolveRecord(
-                case.name,
-                case.family,
-                case.size_label,
-                case.size,
-                tool,
-                sample - config.warmups,
-                seconds,
-                status,
-                objective,
-                None,
-                _relative_error(objective, references[sample - config.warmups][0]),
-                None,
-                None,
+        records = []
+        for sample, objective, status, seconds, solution in rows:
+            if sample < config.warmups:
+                continue
+            sample_index = sample - config.warmups
+            reference_objective, reference_solution = references[sample_index]
+            solution_array = np.asarray(solution) if solution is not None else None
+            records.append(
+                SolveRecord(
+                    case.name,
+                    case.family,
+                    case.size_label,
+                    case.size,
+                    tool,
+                    sample_index,
+                    seconds,
+                    status,
+                    objective,
+                    None,
+                    _relative_error(objective, reference_objective),
+                    _relative_vector_error(solution_array, reference_solution),
+                    status_error(status),
+                )
             )
-            for sample, objective, status, seconds in rows
-            if sample >= config.warmups
-        ]
+        return records
     records: list[SolveRecord] = []
     all_values = values_by_sample[: config.warmups] + values_by_sample
     for index, values in enumerate(all_values):
@@ -725,7 +752,7 @@ def _run_tool_samples(
                         iterations,
                         _relative_error(objective, reference_objective),
                         _relative_vector_error(solution, reference_solution),
-                        None,
+                        status_error(status),
                     )
                 )
         except Exception as exc:

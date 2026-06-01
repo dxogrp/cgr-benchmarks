@@ -1,12 +1,5 @@
 # CVXGenRust Benchmarks
 
-This repository benchmarks [`cvxgenrust`](https://github.com/dxogrp/cvxgenrust)
-against direct CVXPY solves and CVXPYgen-generated solvers.
-
-The default comparison is Clarabel-aligned: `cvxgenrust` and direct CVXPY use
-Clarabel, and CVXPYgen is asked to generate Clarabel-backed solvers where that
-backend supports the problem.
-
 ## Setup
 
 Install dependencies with uv:
@@ -24,75 +17,50 @@ CMake, for example through your system package manager or `CMAKE_PREFIX_PATH`.
 
 ## Commands
 
-Generate solver projects:
+The benchmark workflow is exposed through `make` targets:
 
 ```bash
-uv run cgr-bench generate
+make sync
+make generate
+make generate-clean
+make run
+make run-skip-generate
+make report
+make plot
+make experiment
+make clean
 ```
 
-Run the benchmark suite:
+Use a different config with:
 
 ```bash
-uv run cgr-bench run
+make CONFIG=path/to/config.toml run
 ```
 
-The default tool list includes `cvxpygen_c`, a generated C driver around
-CVXPYgen's C API. The `seconds` column is the main timing metric. For
-`cgr_python` and `cvxpygen`, it measures the Python wrapper call including
-parameter update overhead. For `cgr_rust` and `cvxpygen_c`, it measures the
-direct native driver call including parameter updates plus the solver call.
-The Markdown summary reports count, median, mean, min, and max; plots use median
-solve time.
-
-Write summary tables from existing raw results:
-
-```bash
-uv run cgr-bench report
-```
-
-## Reproducibility Checks
-
-The default checks are fast experiment-validation tests. They verify that the
-benchmark configuration loads, every problem family is DPP-valid and solvable,
-sample generation matches the declared parameters, and result/report schemas stay
-stable.
-
-```bash
-uv run pytest
-```
-
-The heavyweight toolchain checks exercise actual `cvxgenrust` and CVXPYgen code
-generation for one QP and one SOCP. They are opt-in because they require the
-full native build stack, including Cargo, CMake, and Eigen3 for CVXPYgen's
-Clarabel backend.
-
-```bash
-CGR_BENCH_RUN_GENERATION_SMOKE=1 uv run pytest tests/test_generation_smoke.py
-```
-
-For a paper artifact review, run the fast checks first, install any missing
-native dependencies, then run the heavyweight generation checks before producing
-the final benchmark tables.
+Run `make help` for the full target list and available options.
 
 ## Outputs
 
-Generated solver projects and temporary build inputs are written under
-`artifacts/`. `cvxgenrust` projects are generated in `cgr_code` folders,
-and CVXPYgen projects are generated in `cpg_code` folders, to avoid Python
-import-name collisions with installed packages. Benchmark outputs are written under
-`results/`:
+Generated artifacts:
 
-- `solve_times.csv`
-- `solve_times.jsonl`
-- `environment.json`
-- `summary.md`
+- `artifacts/generated/`: cvxgenrust and CVXPYgen generated projects
+- `artifacts/rust_drivers/`: generated Rust benchmark drivers
+- `artifacts/cvxpygen_c_drivers/`: generated C benchmark drivers
+- `artifacts/rust_samples/`, `artifacts/cvxpygen_samples/`, `artifacts/cvxpygen_c_samples/`: serialized benchmark inputs
 
-Timing excludes code generation and compilation. Python-level solve paths include
-parameter update and wrapper overhead. Binary size is intentionally not reported:
-the Rust and C/Python artifact boundaries are implementation-language dependent,
-so the benchmark focuses on solve latency.
+Benchmark results:
 
-The default problem suite includes tiny, small, medium, large, and xlarge variants
-for each problem family. Raw timing rows include `problem_family`, `size_label`, and
-`size` columns so scaling plots can compare solve time as problem dimensions
-grow.
+- `results/solve_times.csv`: raw timing and comparison rows
+- `results/solve_times.jsonl`: JSONL copy of raw rows
+- `results/environment.json`: tool and environment metadata
+- `results/summary.md`: Markdown summary report
+- `results/plots/`: generated PNG plots
+
+The `seconds` column is the main timing metric. For `cgr_python` and
+`cvxpygen`, it measures the Python wrapper call including parameter update
+overhead. For `cgr_rust` and `cvxpygen_c`, it measures the direct native driver
+call including parameter updates plus the solver call.
+
+Timing excludes code generation and compilation. Raw timing rows include
+`problem_family`, `size_label`, and `size` columns so scaling plots can compare
+solve time as problem dimensions grow.

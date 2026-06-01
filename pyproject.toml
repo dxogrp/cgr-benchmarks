@@ -19,20 +19,8 @@ dependencies = [
 [project.scripts]
 cgr-bench = "cgr_benchmarks.cli:main"
 
-[dependency-groups]
-dev = [
-    "pytest>=8.3",
-]
-
 [tool.uv.sources]
 cvxgenrust = { path = "../cvxgenrust", editable = true }
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-markers = [
-    "reproducibility: fast checks for experiment configuration, problem definitions, and output schemas",
-    "toolchain: opt-in checks that generate and compile external solver code",
-]
 
 [build-system]
 requires = ["hatchling"]
