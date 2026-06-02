@@ -3,6 +3,7 @@ from __future__ import annotations
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -19,6 +20,7 @@ class BenchmarkConfig:
     results_dir: Path
     cvxpy_solver: str
     cvxpygen_solver: str
+    solver_settings: dict[str, Any]
     rust_release: bool
 
     @classmethod
@@ -28,6 +30,7 @@ class BenchmarkConfig:
         paths = data.get("paths", {})
         cvxpy = data.get("cvxpy", {})
         cvxpygen = data.get("cvxpygen", {})
+        solver_settings = data.get("solver_settings", {})
         rust = data.get("rust", {})
         tool_skips = {
             str(name): tuple(str(tool) for tool in tools)
@@ -46,6 +49,7 @@ class BenchmarkConfig:
             results_dir=Path(paths.get("results_dir", "results")),
             cvxpy_solver=str(cvxpy.get("solver", "CLARABEL")),
             cvxpygen_solver=str(cvxpygen.get("solver", "CLARABEL")),
+            solver_settings=dict(solver_settings),
             rust_release=bool(rust.get("release", True)),
         )
 

@@ -41,14 +41,26 @@ def generate_cvxgenrust(case: ProblemCase, output_dir: Path) -> None:
     cgr.generate_code(fixture.problem, code_dir=output_dir.resolve(), module_name=f"{case.name}_cgr")
 
 
-def generate_cvxpygen(case: ProblemCase, output_dir: Path, solver: str) -> None:
+def generate_cvxpygen(
+    case: ProblemCase,
+    output_dir: Path,
+    solver: str,
+    solver_settings: dict[str, object],
+) -> None:
     cpg = importlib.import_module("cvxpygen.cpg")
     fixture = case.factory()
     output_dir.parent.mkdir(parents=True, exist_ok=True)
     cwd = Path.cwd()
     try:
         os.chdir(output_dir.parent)
-        cpg.generate_code(fixture.problem, code_dir=output_dir.name, solver=solver, wrapper=True)
+        cpg.generate_code(
+            fixture.problem,
+            code_dir=output_dir.name,
+            solver=solver,
+            solver_opts=solver_settings,
+            enable_settings=list(solver_settings),
+            wrapper=True,
+        )
     finally:
         os.chdir(cwd)
 
@@ -61,7 +73,7 @@ def generate_all(config: BenchmarkConfig, clean: bool = False) -> None:
         if "cgr_python" in tools or "cgr_rust" in tools:
             generate_cvxgenrust(case, cgr_dir(config, case.name))
         if "cvxpygen" in tools or "cvxpygen_c" in tools:
-            generate_cvxpygen(case, cpg_dir(config, case.name), config.cvxpygen_solver)
+            generate_cvxpygen(case, cpg_dir(config, case.name), config.cvxpygen_solver, config.solver_settings)
 
 
 def build_cvxgenrust(config: BenchmarkConfig, case: ProblemCase) -> None:

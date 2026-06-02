@@ -102,8 +102,15 @@ def _time_call(callable_) -> tuple[float, object]:
 def _run_cvxpy_direct(
     fixture: ProblemFixture,
     solver: str,
+    solver_settings: dict[str, object],
 ) -> tuple[float, float | None, str, int | None, np.ndarray | None]:
-    elapsed, objective = _time_call(lambda: fixture.problem.solve(solver=getattr(cp, solver), warm_start=False))
+    elapsed, objective = _time_call(
+        lambda: fixture.problem.solve(
+            solver=getattr(cp, solver),
+            warm_start=False,
+            **solver_settings,
+        )
+    )
     return (
         elapsed,
         float(objective) if objective is not None else None,
@@ -146,6 +153,22 @@ def _json_ready(value: np.ndarray | float) -> object:
     return array.tolist()
 
 
+def _rust_literal(value: object) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, str):
+        return json.dumps(value)
+    return repr(value)
+
+
+def _c_literal(value: object) -> str:
+    if isinstance(value, bool):
+        return "1" if value else "0"
+    if isinstance(value, str):
+        return json.dumps(value)
+    return repr(value)
+
+
 def _run_cvxpygen_subprocess(
     config: BenchmarkConfig,
     case: ProblemCase,
@@ -161,6 +184,9 @@ def _run_cvxpygen_subprocess(
 
     solver_path = (cpg_dir(config, case.name) / "cpg_solver.py").resolve()
     generated_parent = solver_path.parent.parent.resolve()
+    solver_settings_path = config.artifacts_dir / "cvxpygen_samples" / f"{case.name}.settings.json"
+    solver_settings_path.write_text(json.dumps(config.solver_settings, sort_keys=True), encoding="utf-8")
+
     script = r"""
 import contextlib
 import importlib.util
@@ -173,7 +199,7 @@ import numpy as np
 
 from cgr_benchmarks.problems import CASES
 
-case_name, solver_path, generated_parent, sample_path, output_path = sys.argv[1:6]
+case_name, solver_path, generated_parent, sample_path, output_path, solver_settings_path = sys.argv[1:7]
 sys.path.insert(0, generated_parent)
 spec = importlib.util.spec_from_file_location(f"{case_name}_cpg_solver", solver_path)
 module = importlib.util.module_from_spec(spec)
@@ -182,6 +208,7 @@ fixture = CASES[case_name].factory()
 fixture.problem.register_solve("CPG", module.cpg_solve)
 parameter_names = list(fixture.parameters)
 samples = json.loads(pathlib.Path(sample_path).read_text(encoding="utf-8"))
+solver_settings = json.loads(pathlib.Path(solver_settings_path).read_text(encoding="utf-8"))
 
 def assign(values):
     for name, value in values.items():
@@ -204,7 +231,7 @@ with pathlib.Path(output_path).open("w", encoding="utf-8") as handle:
             assign(values)
             start = time.perf_counter()
             with open("/dev/null", "w", encoding="utf-8") as devnull, contextlib.redirect_stdout(devnull):
-                objective = fixture.problem.solve(method="CPG", updated_params=parameter_names)
+                objective = fixture.problem.solve(method="CPG", updated_params=parameter_names, **solver_settings)
             seconds = time.perf_counter() - start
             stats = getattr(fixture.problem, "solver_stats", None)
             row = {
@@ -238,6 +265,7 @@ with pathlib.Path(output_path).open("w", encoding="utf-8") as handle:
             str(generated_parent),
             str(sample_path),
             str(output_path),
+            str(solver_settings_path),
         ],
         check=True,
         stdout=subprocess.DEVNULL,
@@ -263,8 +291,11 @@ def _run_registered(
     fixture: ProblemFixture,
     method: str,
     parameter_names: list[str],
+    solver_settings: dict[str, object],
 ) -> tuple[float, float | None, str, int | None, np.ndarray | None]:
-    elapsed, objective = _time_call(lambda: fixture.problem.solve(method=method, updated_params=parameter_names))
+    elapsed, objective = _time_call(
+        lambda: fixture.problem.solve(method=method, updated_params=parameter_names, **solver_settings)
+    )
     return (
         elapsed,
         float(objective) if objective is not None else None,
@@ -301,7 +332,7 @@ def _write_cgr_rust_driver(config: BenchmarkConfig, case: ProblemCase, fixture: 
     (driver_dir / "src" / "main.rs").write_text(
         "\n".join(
             [
-                f"use {case.name}_cgr::CGRProblem;",
+                f"use {case.name}_cgr::{{CGRProblem, ClarabelSettings}};",
                 "use std::env;",
                 "use std::fs;",
                 "use std::time::Instant;",
@@ -324,8 +355,13 @@ def _write_cgr_rust_driver(config: BenchmarkConfig, case: ProblemCase, fixture: 
                 "                .collect();",
                 "            problem.set_parameter(name, &values?)?;",
                 "        }",
+                "        let mut settings = ClarabelSettings::<f64>::default();",
+                *[
+                    f"        settings.{name} = {_rust_literal(value)};"
+                    for name, value in config.solver_settings.items()
+                ],
                 "        let start = Instant::now();",
-                "        let solution = problem.solve()?;",
+                "        let solution = problem.solve_with_settings(settings)?;",
                 "        let seconds = start.elapsed().as_secs_f64();",
                 "        let mut solution_values = Vec::new();",
                 *solution_extract_lines,
@@ -491,7 +527,7 @@ int main(int argc, char **argv) {{
         return 2;
     }}
     cpg_set_solver_default_settings();
-    cpg_set_solver_verbose(0);
+{chr(10).join(f"    cpg_set_solver_{name}({_c_literal(value)});" for name, value in config.solver_settings.items())}
     printf("sample,status,objective,seconds,solution\\n");
     char line[65536];
     size_t sample = 0;
@@ -732,9 +768,18 @@ def _run_tool_samples(
         try:
             _assign_values(fixture, values)
             if tool == "cvxpy_direct":
-                elapsed, objective, status, iterations, solution = _run_cvxpy_direct(fixture, config.cvxpy_solver)
+                elapsed, objective, status, iterations, solution = _run_cvxpy_direct(
+                    fixture,
+                    config.cvxpy_solver,
+                    config.solver_settings,
+                )
             elif tool == "cgr_python":
-                elapsed, objective, status, iterations, solution = _run_registered(fixture, "CGR", parameter_names)
+                elapsed, objective, status, iterations, solution = _run_registered(
+                    fixture,
+                    "CGR",
+                    parameter_names,
+                    config.solver_settings,
+                )
             else:
                 raise ValueError(f"unknown tool: {tool}")
             if sample_index >= 0:
@@ -774,7 +819,11 @@ def _reference_samples(
     for values in values_by_sample:
         _assign_values(fixture, values)
         try:
-            fixture.problem.solve(solver=getattr(cp, config.cvxpy_solver), warm_start=False)
+            fixture.problem.solve(
+                solver=getattr(cp, config.cvxpy_solver),
+                warm_start=False,
+                **config.solver_settings,
+            )
             solved_references.append((float(fixture.problem.value), _solution_vector(fixture)))
         except Exception:
             solved_references.append((None, None))

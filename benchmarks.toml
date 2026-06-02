@@ -73,5 +73,15 @@ solver = "CLARABEL"
 [cvxpygen]
 solver = "CLARABEL"
 
+[solver_settings]
+verbose = false
+max_iter = 200
+tol_gap_abs = 1e-8
+tol_gap_rel = 1e-8
+tol_feas = 1e-8
+tol_infeas_abs = 1e-8
+tol_infeas_rel = 1e-8
+tol_ktratio = 1e-6
+
 [rust]
 release = true
