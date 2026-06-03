@@ -474,15 +474,24 @@ def _write_cvxpygen_c_driver(config: BenchmarkConfig, case: ProblemCase, fixture
     for name, variable in fixture.variables.items():
         ident = _c_ident(name)
         size = int(variable.size)
-        solution_extract_lines.append(
-            f"""        for (size_t value_index = 0; value_index < {size}; value_index++) {{
+        if size == 1:
+            solution_extract_lines.append(
+                f"""        if (wrote_solution) {{
+            printf("|");
+        }}
+        printf("%.17g", (double)CPG_Result.prim->{ident});
+        wrote_solution = 1;"""
+            )
+        else:
+            solution_extract_lines.append(
+                f"""        for (size_t value_index = 0; value_index < {size}; value_index++) {{
             if (wrote_solution) {{
                 printf("|");
             }}
             printf("%.17g", (double)CPG_Result.prim->{ident}[value_index]);
             wrote_solution = 1;
         }}"""
-        )
+            )
     driver_c = f"""
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>

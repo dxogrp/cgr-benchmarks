@@ -102,46 +102,109 @@ def _socp(m: int = 8, n: int = 4) -> ProblemFixture:
     return ProblemFixture(problem, {"x": x}, parameters, sample)
 
 
+def _flow_edges(node_count: int) -> list[tuple[int, int]]:
+    edges = [(node, node + 1) for node in range(node_count - 1)]
+    edges.extend((node, node + 2) for node in range(node_count - 2))
+    edges.append((0, node_count - 1))
+    return edges
+
+
+def _flow_incidence(node_count: int, edges: list[tuple[int, int]]) -> np.ndarray:
+    incidence = np.zeros((node_count, len(edges)))
+    for edge_index, (tail, head) in enumerate(edges):
+        incidence[tail, edge_index] = 1.0
+        incidence[head, edge_index] = -1.0
+    return incidence
+
+
 def _flow_lp(commodities: int = 2) -> ProblemFixture:
-    edge_count = 2 * commodities
-    f = cp.Variable(edge_count, name="f")
-    c = cp.Parameter(edge_count, name="c")
-    d = cp.Parameter(commodities, name="d")
-    constraints = [f >= 0, f <= 3]
-    for index in range(commodities):
-        constraints.append(f[index] + f[index + commodities] == d[index])
-    constraints.append(cp.sum(f[:commodities]) <= float(commodities))
-    problem = cp.Problem(
-        cp.Minimize(c @ f),
-        constraints,
-    )
+    node_count = max(4, commodities + 3)
+    edges = _flow_edges(node_count)
+    edge_count = len(edges)
+    incidence = _flow_incidence(node_count, edges)
+    balances = np.zeros((commodities, node_count))
+    for commodity in range(commodities):
+        source = 0
+        sink = node_count - 1 - (commodity % min(2, node_count - 1))
+        balances[commodity, source] = 1.0
+        balances[commodity, sink] = -1.0
+
+    f = cp.Variable((commodities, edge_count), name="f")
+    c = cp.Parameter((commodities, edge_count), name="c")
+    d = cp.Parameter(commodities, nonneg=True, name="d")
+    capacity = cp.Parameter(edge_count, nonneg=True, name="capacity")
+    constraints = [f >= 0, cp.sum(f, axis=0) <= capacity]
+    for commodity in range(commodities):
+        constraints.append(incidence @ f[commodity, :] == d[commodity] * balances[commodity])
+    problem = cp.Problem(cp.Minimize(cp.sum(cp.multiply(c, f))), constraints)
 
     def sample(rng: np.random.Generator, _: int) -> dict[str, np.ndarray]:
-        return {"c": rng.uniform(0.1, 3.0, size=edge_count), "d": rng.uniform(0.2, 1.8, size=commodities)}
+        demand = rng.uniform(0.15, 0.55, size=commodities)
+        base_capacity = 0.75 * float(demand.sum()) + 0.4
+        return {
+            "c": rng.uniform(0.1, 3.0, size=(commodities, edge_count)),
+            "d": demand,
+            "capacity": rng.uniform(base_capacity, base_capacity + 1.0, size=edge_count),
+        }
 
-    parameters = {"c": c, "d": d}
+    parameters = {"c": c, "d": d, "capacity": capacity}
     _assign(parameters, sample(np.random.default_rng(5), 0))
     return ProblemFixture(problem, {"f": f}, parameters, sample)
 
 
 def _mpc(horizon: int = 6) -> ProblemFixture:
-    x = cp.Variable(horizon + 1, name="x")
-    u = cp.Variable(horizon, name="u")
-    x0 = cp.Parameter(name="x0")
-    reference = cp.Parameter(horizon + 1, name="reference")
-    constraints = [x[0] == x0, cp.abs(u) <= 1.0]
-    for t in range(horizon):
-        constraints.append(x[t + 1] == x[t] + u[t])
-    problem = cp.Problem(
-        cp.Minimize(cp.sum_squares(x - reference) + 0.05 * cp.sum_squares(u)),
-        constraints,
+    state_dim = 3
+    control_dim = 2
+    a_matrix = np.array(
+        [
+            [0.92, 0.12, 0.00],
+            [0.00, 0.85, 0.10],
+            [0.05, 0.00, 0.88],
+        ]
     )
+    b_matrix = np.array(
+        [
+            [0.18, 0.02],
+            [0.04, 0.15],
+            [0.10, -0.08],
+        ]
+    )
+    state_weight_sqrt = np.sqrt(np.array([[1.8], [1.0], [0.6]]))
+    control_weight_sqrt = np.sqrt(np.array([[0.08], [0.05]]))
 
-    def sample(rng: np.random.Generator, index: int) -> dict[str, np.ndarray | float]:
+    x = cp.Variable((state_dim, horizon + 1), name="x")
+    u = cp.Variable((control_dim, horizon), name="u")
+    x0 = cp.Parameter(state_dim, name="x0")
+    reference = cp.Parameter((state_dim, horizon + 1), name="reference")
+    constraints = [
+        x[:, 0] == x0,
+        cp.abs(u) <= 1.0,
+        cp.abs(x[0:2, :]) <= 2.5,
+    ]
+    for t in range(horizon):
+        constraints.append(x[:, t + 1] == a_matrix @ x[:, t] + b_matrix @ u[:, t])
+    if horizon > 1:
+        constraints.append(cp.abs(u[:, 1:] - u[:, :-1]) <= 0.35)
+    objective = (
+        cp.sum_squares(cp.multiply(state_weight_sqrt, x - reference))
+        + cp.sum_squares(cp.multiply(control_weight_sqrt, u))
+        + 0.03 * cp.sum_squares(x[:, horizon])
+    )
+    problem = cp.Problem(cp.Minimize(objective), constraints)
+
+    def sample(rng: np.random.Generator, index: int) -> dict[str, np.ndarray]:
         grid = np.linspace(0.0, 1.0, horizon + 1)
+        phase = 0.15 * index
+        path = np.vstack(
+            [
+                0.7 * np.sin(np.pi * grid + phase),
+                0.5 * np.cos(0.5 * np.pi * grid + phase),
+                0.25 * np.sin(2.0 * np.pi * grid + 0.5 * phase),
+            ]
+        )
         return {
-            "x0": float(rng.normal(scale=0.2)),
-            "reference": np.sin(grid * np.pi + 0.1 * index),
+            "x0": rng.normal(scale=0.15, size=state_dim),
+            "reference": path,
         }
 
     parameters = {"x0": x0, "reference": reference}
@@ -149,24 +212,129 @@ def _mpc(horizon: int = 6) -> ProblemFixture:
     return ProblemFixture(problem, {"x": x, "u": u}, parameters, sample)
 
 
+def _sector_matrix(n: int, sector_count: int) -> np.ndarray:
+    matrix = np.zeros((sector_count, n))
+    for asset in range(n):
+        matrix[asset % sector_count, asset] = 1.0
+    return matrix
+
+
 def _portfolio(n: int = 8) -> ProblemFixture:
+    factor_count = max(1, min(4, n // 2))
+    sector_count = max(1, min(4, n))
+    asset_grid = np.linspace(0.0, 1.0, n)
+    factor_columns = [
+        np.ones(n),
+        np.sin(np.pi * asset_grid),
+        np.cos(2.0 * np.pi * asset_grid),
+        np.linspace(-1.0, 1.0, n),
+    ]
+    factor_exposure = np.vstack(factor_columns[:factor_count]).T
+    idiosyncratic_sqrt = np.sqrt(np.linspace(0.2, 1.1, n))
+    sector_matrix = _sector_matrix(n, sector_count)
+    max_position = min(0.7, max(0.12, 2.5 / n))
+
     w = cp.Variable(n, name="w")
     mu = cp.Parameter(n, name="mu")
     target = cp.Parameter(name="target")
+    previous = cp.Parameter(n, nonneg=True, name="previous")
     risk = cp.Parameter(nonneg=True, name="risk")
-    covariance = np.diag(np.linspace(0.5, 2.0, n))
-    problem = cp.Problem(
-        cp.Minimize(risk * cp.quad_form(w, covariance) - mu @ w),
-        [cp.sum(w) == 1, w >= 0, mu @ w >= target],
-    )
+    factor_risk = cp.sum_squares(factor_exposure.T @ w)
+    specific_risk = cp.sum_squares(cp.multiply(idiosyncratic_sqrt, w))
+    transaction_penalty = 0.02 * cp.norm1(w - previous)
+    objective = risk * (factor_risk + specific_risk) - mu @ w + transaction_penalty
+    constraints = [
+        cp.sum(w) == 1,
+        w >= 0,
+        w <= max_position,
+        cp.norm1(w - previous) <= 0.75,
+        sector_matrix @ w <= 0.65,
+        mu @ w >= target,
+    ]
+    problem = cp.Problem(cp.Minimize(objective), constraints)
 
     def sample(rng: np.random.Generator, _: int) -> dict[str, np.ndarray | float]:
         returns = rng.uniform(0.01, 0.20, size=n)
-        return {"mu": returns, "target": float(np.quantile(returns, 0.35)), "risk": float(rng.uniform(0.1, 1.0))}
+        holdings = rng.uniform(0.1, 1.0, size=n)
+        holdings /= float(holdings.sum())
+        return {
+            "mu": returns,
+            "target": float(np.quantile(returns, 0.30)),
+            "previous": holdings,
+            "risk": float(rng.uniform(0.2, 1.2)),
+        }
 
-    parameters = {"mu": mu, "target": target, "risk": risk}
+    parameters = {"mu": mu, "target": target, "previous": previous, "risk": risk}
     _assign(parameters, sample(np.random.default_rng(7), 0))
     return ProblemFixture(problem, {"w": w}, parameters, sample)
+
+
+def _lasso(m: int = 12, n: int = 6) -> ProblemFixture:
+    x = cp.Variable(n, name="x")
+    a = cp.Parameter((m, n), name="A")
+    b = cp.Parameter(m, name="b")
+    lambda_reg = cp.Parameter(nonneg=True, name="lambda_reg")
+    problem = cp.Problem(cp.Minimize(0.5 * cp.sum_squares(a @ x - b) + lambda_reg * cp.norm1(x)))
+
+    def sample(rng: np.random.Generator, _: int) -> dict[str, np.ndarray | float]:
+        signal = rng.normal(size=n)
+        design = rng.normal(size=(m, n)) / np.sqrt(float(n))
+        response = design @ signal + rng.normal(scale=0.15, size=m)
+        return {"A": design, "b": response, "lambda_reg": float(rng.uniform(0.03, 0.3))}
+
+    parameters = {"A": a, "b": b, "lambda_reg": lambda_reg}
+    _assign(parameters, sample(np.random.default_rng(10), 0))
+    return ProblemFixture(problem, {"x": x}, parameters, sample)
+
+
+def _classification_labels(m: int) -> np.ndarray:
+    labels = np.ones(m)
+    labels[1::2] = -1.0
+    return labels
+
+
+def _svm(m: int = 12, n: int = 4) -> ProblemFixture:
+    w = cp.Variable(n, name="w")
+    beta = cp.Variable(name="beta")
+    slack = cp.Variable(m, name="slack")
+    x_data = cp.Parameter((m, n), name="X")
+    labels = _classification_labels(m)
+    margin = cp.multiply(labels, x_data @ w + beta)
+    penalty = 1.0
+    constraints = [slack >= 1.0 - margin, slack >= 0]
+    problem = cp.Problem(cp.Minimize(0.5 * cp.sum_squares(w) + penalty * cp.sum(slack)), constraints)
+
+    def sample(rng: np.random.Generator, _: int) -> dict[str, np.ndarray]:
+        centers = 0.6 * labels.reshape(m, 1) * np.linspace(0.5, 1.2, n)
+        return {"X": centers + rng.normal(scale=0.8, size=(m, n))}
+
+    parameters = {"X": x_data}
+    _assign(parameters, sample(np.random.default_rng(11), 0))
+    return ProblemFixture(problem, {"w": w, "beta": beta, "slack": slack}, parameters, sample)
+
+
+def _logistic_regression(m: int = 12, n: int = 4) -> ProblemFixture:
+    w = cp.Variable(n, name="w")
+    beta = cp.Variable(name="beta")
+    x_data = cp.Parameter((m, n), name="X")
+    lambda_reg = cp.Parameter(nonneg=True, name="lambda_reg")
+    labels = _classification_labels(m)
+    margin = cp.multiply(labels, x_data @ w + beta)
+    # QP-representable second-order surrogate of log(1 + exp(-margin)) around zero.
+    surrogate_loss = cp.sum(0.125 * cp.square(margin) - 0.5 * margin + np.log(2.0)) / float(m)
+    objective = surrogate_loss + 0.5 * lambda_reg * cp.sum_squares(w)
+    problem = cp.Problem(cp.Minimize(objective))
+
+    def sample(rng: np.random.Generator, _: int) -> dict[str, np.ndarray | float]:
+        centers = 0.5 * labels.reshape(m, 1) * np.linspace(0.4, 1.0, n)
+        return {
+            "X": centers + rng.normal(scale=0.9, size=(m, n)),
+            "lambda_reg": float(rng.uniform(0.03, 0.3)),
+        }
+
+    parameters = {"X": x_data, "lambda_reg": lambda_reg}
+    _assign(parameters, sample(np.random.default_rng(12), 0))
+    return ProblemFixture(problem, {"w": w, "beta": beta}, parameters, sample)
 
 
 def _trace_sdp(n: int = 3) -> ProblemFixture:
@@ -260,9 +428,19 @@ CASES: dict[str, ProblemCase] = {
         "small",
         3,
     ),
-    "flow_lp": _case("flow_lp", "Small network-flow LP", _flow_lp, "flow_lp", "small", 2),
-    "mpc": _case("mpc", "Paper-inspired scalar MPC QP", _mpc, "mpc", "small", 6),
-    "portfolio": _case("portfolio", "Paper-inspired long-only portfolio QP", _portfolio, "portfolio", "small", 8),
+    "flow_lp": _case("flow_lp", "Multi-commodity network-flow LP", _flow_lp, "flow_lp", "small", 2),
+    "mpc": _case("mpc", "Multi-state tracking MPC QP", _mpc, "mpc", "small", 6),
+    "portfolio": _case("portfolio", "Factor-risk portfolio QP", _portfolio, "portfolio", "small", 8),
+    "lasso": _case("lasso", "L1-regularized least-squares problem", _lasso, "lasso", "small", 6),
+    "svm": _case("svm", "Linear soft-margin SVM QP", _svm, "svm", "small", 4),
+    "logistic_regression": _case(
+        "logistic_regression",
+        "Quadratic-surrogate logistic regression",
+        _logistic_regression,
+        "logistic_regression",
+        "small",
+        4,
+    ),
 }
 
 for label, n in [("tiny", 2), ("small", 4), ("medium", 8), ("large", 16), ("xlarge", 32)]:
@@ -325,16 +503,57 @@ for label, commodities in [("tiny", 1), ("small", 2), ("medium", 4), ("large", 8
     )
 
 for label, horizon in [("tiny", 3), ("small", 6), ("medium", 12), ("large", 24), ("xlarge", 48)]:
-    _size_case(CASES, "mpc", label, "Scalar MPC QP", f"horizon={horizon}", lambda horizon=horizon: _mpc(horizon), horizon)
+    _size_case(
+        CASES,
+        "mpc",
+        label,
+        "Multi-state tracking MPC QP",
+        f"horizon={horizon}",
+        lambda horizon=horizon: _mpc(horizon),
+        horizon,
+    )
 
 for label, n in [("tiny", 4), ("small", 8), ("medium", 16), ("large", 32), ("xlarge", 64)]:
     _size_case(
         CASES,
         "portfolio",
         label,
-        "Long-only portfolio QP",
+        "Factor-risk portfolio QP",
         f"n={n}",
         lambda n=n: _portfolio(n),
+        n,
+    )
+
+for label, n in [("tiny", 4), ("small", 6), ("medium", 10), ("large", 16), ("xlarge", 24)]:
+    _size_case(
+        CASES,
+        "lasso",
+        label,
+        "L1-regularized least-squares problem",
+        f"n={n}",
+        lambda n=n: _lasso(2 * n, n),
+        n,
+    )
+
+for label, n in [("tiny", 3), ("small", 4), ("medium", 6), ("large", 8), ("xlarge", 12)]:
+    _size_case(
+        CASES,
+        "svm",
+        label,
+        "Linear soft-margin SVM QP",
+        f"n={n}",
+        lambda n=n: _svm(3 * n, n),
+        n,
+    )
+
+for label, n in [("tiny", 3), ("small", 4), ("medium", 6), ("large", 8), ("xlarge", 10)]:
+    _size_case(
+        CASES,
+        "logistic_regression",
+        label,
+        "Quadratic-surrogate logistic regression",
+        f"n={n}",
+        lambda n=n: _logistic_regression(3 * n, n),
         n,
     )
 
