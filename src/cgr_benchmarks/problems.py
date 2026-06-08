@@ -92,7 +92,7 @@ def _parametric_quad_form(n: int = 4) -> ProblemFixture:
     x = cp.Variable(n, name="x")
     p = cp.Parameter((n, n), PSD=True, name="P")
     q = cp.Parameter(n, name="q")
-    problem = cp.Problem(cp.Minimize(cp.quad_form(x, p) + q @ x), [cp.sum(x) == 1, x >= 0])
+    problem = cp.Problem(cp.Minimize(cp.quad_form(x, p) + q @ x), [cp.sum(x) <= 1, x >= 0])
 
     def sample(rng: np.random.Generator, _: int) -> dict[str, np.ndarray]:
         raw = rng.normal(size=(n, n))
@@ -111,7 +111,7 @@ def _socp(m: int = 8, n: int = 4) -> ProblemFixture:
     rho = cp.Parameter(nonneg=True, name="rho")
     problem = cp.Problem(
         cp.Minimize(cp.sum_squares(a @ x - b) + 0.1 * cp.sum_squares(x)),
-        [cp.norm(x, 2) <= rho, x >= 0, cp.sum(x) <= 1],
+        [cp.norm(x, 2) <= rho, x >= 0, cp.sum(x) == 1],
     )
 
     def sample(rng: np.random.Generator, _: int) -> dict[str, np.ndarray | float]:
@@ -340,9 +340,8 @@ def _logistic_regression(m: int = 12, n: int = 4) -> ProblemFixture:
     lambda_reg = cp.Parameter(nonneg=True, name="lambda_reg")
     labels = _classification_labels(m)
     margin = cp.multiply(labels, x_data @ w + beta)
-    # QP-representable second-order surrogate of log(1 + exp(-margin)) around zero.
-    surrogate_loss = cp.sum(0.125 * cp.square(margin) - 0.5 * margin + np.log(2.0)) / float(m)
-    objective = surrogate_loss + 0.5 * lambda_reg * cp.sum_squares(w)
+    logistic_loss = cp.sum(cp.logistic(-margin)) / float(m)
+    objective = logistic_loss + 0.5 * lambda_reg * cp.sum_squares(w)
     problem = cp.Problem(cp.Minimize(objective))
 
     def sample(rng: np.random.Generator, _: int) -> dict[str, np.ndarray | float]:
@@ -455,7 +454,7 @@ CASES: dict[str, ProblemCase] = {
     "svm": _case("svm", "Linear soft-margin SVM QP", _svm, "svm", "small", 4),
     "logistic_regression": _case(
         "logistic_regression",
-        "Quadratic-surrogate logistic regression",
+        "Regularized logistic regression",
         _logistic_regression,
         "logistic_regression",
         "small",
@@ -571,7 +570,7 @@ for label, n in [("tiny", 3), ("small", 4), ("medium", 6), ("large", 8), ("xlarg
         CASES,
         "logistic_regression",
         label,
-        "Quadratic-surrogate logistic regression",
+        "Regularized logistic regression",
         f"n={n}",
         lambda n=n: _logistic_regression(3 * n, n),
         n,
