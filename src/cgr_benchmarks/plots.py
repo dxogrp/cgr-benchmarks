@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 from .config import BenchmarkConfig
+from .problems import size_axis_label
 from .status import successful_solve_rows
 
 
@@ -19,7 +20,7 @@ def _save_bar_plot(frame: pd.DataFrame, x: str, y: str, hue: str, title: str, yl
     pivot = frame.pivot(index=x, columns=hue, values=y)
     ax = pivot.plot(kind="bar", figsize=(10, 5), width=0.82)
     ax.set_title(title)
-    ax.set_xlabel("")
+    ax.set_xlabel("benchmark problem")
     ax.set_ylabel(ylabel)
     ax.grid(axis="y", alpha=0.25)
     ax.legend(title="")
@@ -44,7 +45,7 @@ def _save_size_plot(frame: pd.DataFrame, path: Path) -> None:
         pivot = family_frame.pivot(index="size", columns="tool", values="seconds").sort_index()
         pivot.plot(ax=axis, marker="o")
         axis.set_title(family)
-        axis.set_xlabel("problem size")
+        axis.set_xlabel(size_axis_label(family))
         axis.set_ylabel("median seconds")
         axis.grid(alpha=0.25)
         axis.legend(title="", fontsize="small")

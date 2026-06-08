@@ -25,6 +25,26 @@ class ProblemCase:
     size: int
 
 
+FAMILY_SIZE_AXIS_LABELS = {
+    "nnls": "features n (samples = 2n)",
+    "box_qp": "decision variables n",
+    "parametric_quad_form": "decision variables n",
+    "socp": "decision variables n (constraints = 2n)",
+    "trace_sdp": "matrix dimension n",
+    "covariance_sdp": "matrix dimension n",
+    "flow_lp": "commodities",
+    "mpc": "prediction horizon",
+    "portfolio": "assets n",
+    "lasso": "features n (samples = 2n)",
+    "svm": "features n (samples = 3n)",
+    "logistic_regression": "features n (samples = 3n)",
+}
+
+
+def size_axis_label(family: str) -> str:
+    return FAMILY_SIZE_AXIS_LABELS.get(family, "problem size")
+
+
 def _assign(parameters: dict[str, cp.Parameter], values: dict[str, np.ndarray | float]) -> None:
     for name, value in values.items():
         parameters[name].value = value
