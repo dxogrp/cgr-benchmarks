@@ -85,7 +85,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "cvxgenrust", editable = "../cvxgenrust" },
+    { name = "cvxgenrust", specifier = "==0.1.0" },
     { name = "cvxpy", specifier = ">=1.9" },
     { name = "cvxpygen", specifier = ">=1.0" },
     { name = "matplotlib", specifier = ">=3.9" },
@@ -209,25 +209,15 @@ wheels = [
 [[package]]
 name = "cvxgenrust"
 version = "0.1.0"
-source = { editable = "../cvxgenrust" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cvxpy" },
     { name = "numpy" },
     { name = "scipy" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "cvxpy", specifier = ">=1.9" },
-    { name = "numpy", specifier = ">=1.26" },
-    { name = "scipy", specifier = ">=1.13" },
-]
-
-[package.metadata.requires-dev]
-dev = [{ name = "pytest", specifier = ">=8.3" }]
-examples = [
-    { name = "marimo", specifier = ">=0.13" },
-    { name = "matplotlib", specifier = ">=3.9" },
+sdist = { url = "https://files.pythonhosted.org/packages/ca/c2/e94e5d9c5453d3912424617f068a9142a2cf3b177d4c38152c2680c7c1f8/cvxgenrust-0.1.0.tar.gz", hash = "sha256:f4989fabfac9e862fa201e517ed56180ac856fed549b129e2b640903c9cddab2", size = 33338 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/75/ac/57398ad9010eff68959bb961275fe6687cef1f6387310289a405bd3f5b2c/cvxgenrust-0.1.0-py3-none-any.whl", hash = "sha256:4a2fe377c751da8a66eb7df5eb3b33f651219c9f8c1f888b328e47494864cb97", size = 40519 },
 ]
 
 [[package]]
