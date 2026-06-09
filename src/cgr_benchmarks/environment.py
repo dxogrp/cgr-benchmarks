@@ -24,7 +24,6 @@ def _command_output(command: list[str], cwd: Path | None = None) -> str:
 
 
 def metadata() -> dict[str, object]:
-    cvxgenrust_path = Path("../cvxgenrust").resolve()
     return {
         "python": sys.version,
         "platform": platform.platform(),
@@ -36,9 +35,6 @@ def metadata() -> dict[str, object]:
         },
         "rustc": _command_output(["rustc", "--version"]),
         "cargo": _command_output(["cargo", "--version"]),
-        "cvxgenrust_git_commit": _command_output(["git", "rev-parse", "HEAD"], cwd=cvxgenrust_path)
-        if cvxgenrust_path.exists()
-        else "unknown",
     }
 
 
@@ -48,4 +44,3 @@ def write_metadata(results_dir: Path) -> None:
         json.dumps(metadata(), indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
-
