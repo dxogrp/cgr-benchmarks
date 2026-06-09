@@ -118,7 +118,7 @@ def _plot_solve_times(result_df: pd.DataFrame, path: Path) -> None:
     available_families = set(summary["problem_family"])
     families = [family for family in PROBLEM_FAMILIES if family in available_families]
 
-    fig, axs = plt.subplots(4, 3, figsize=(12, 13.5), sharey=True)
+    fig, axs = plt.subplots(4, 3, figsize=(12, 12), sharey=True)
     legend_handles = {}
 
     for index, family in enumerate(families):
