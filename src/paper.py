@@ -6,8 +6,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from cgr_benchmarks.problems import size_axis_label
-
 mpl.use("Agg")
 
 mpl.rcParams["text.usetex"] = which("latex") is not None
@@ -26,22 +24,52 @@ PROBLEM_FAMILIES = [
     "parametric_quad_form",
     "trace_sdp",
     "covariance_sdp",
-    "mpc",
-    "portfolio",
-    "flow_lp",
-    "logistic_regression",
     "lasso",
     "svm",
+    "logistic_regression",
+    "mpc",
+    "flow_lp",
+    "portfolio",
 ]
+
+TITLE_FAMILIES = {
+    "nnls": "Nonnegative least squares",
+    "box_qp": "Box and equality constrained QP",
+    "socp": "Simplex constrained SOCP",
+    "parametric_quad_form": "Parametric convex QP",
+    "trace_sdp": "Trace constrained SDP",
+    "covariance_sdp": "Covariance estimation",
+    "lasso": "Lasso regression",
+    "svm": "Support vector machine",
+    "logistic_regression": "Logistic regression",
+    "mpc": "Model predictive control",
+    "flow_lp": "Network flow optimization",
+    "portfolio": "Portfolio optimization",
+}
+
+X_AXIS_LABELS = {
+    "nnls": "$n$",
+    "box_qp": "$n$",
+    "socp": "$n$",
+    "parametric_quad_form": "$n$",
+    "trace_sdp": "$n$",
+    "covariance_sdp": "$n$",
+    "lasso": "$n$",
+    "svm": "$n$",
+    "logistic_regression": "$n$",
+    "mpc": "$H$",
+    "flow_lp": "$p$",
+    "portfolio": "$n$",
+}
 
 METHODS = ["cvxpy_direct", "cgr_python", "cvxpygen", "cgr_rust", "cvxpygen_c"]
 
 METHOD_LABELS = {
-    "cvxpy_direct": "CVXPY",
-    "cgr_python": "CvxGenRust (Python)",
-    "cvxpygen": "CVXPYgen (Python)",
-    "cgr_rust": "CvxGenRust (Rust)",
-    "cvxpygen_c": "CVXPYgen (C)",
+    "cvxpy_direct": r"\texttt{CVXPY}",
+    "cgr_python": r"\texttt{cvxgenrust} (Python)",
+    "cvxpygen": r"\texttt{CVXPYgen} (Python)",
+    "cgr_rust": r"\texttt{cvxgenrust} (Rust)",
+    "cvxpygen_c": r"\texttt{CVXPYgen} (C)",
 }
 
 METHOD_STYLES = {
@@ -84,12 +112,6 @@ def _summarize_solve_times(frame: pd.DataFrame) -> pd.DataFrame:
     return summary
 
 
-def _format_family_title(family: str) -> str:
-    if mpl.rcParams["text.usetex"]:
-        return family.replace("_", r"\_")
-    return family.replace("_", " ")
-
-
 def _plot_solve_times(result_df: pd.DataFrame, path: Path) -> None:
     solve_df = _successful_rows(result_df)
     summary = _summarize_solve_times(solve_df)
@@ -119,11 +141,11 @@ def _plot_solve_times(result_df: pd.DataFrame, path: Path) -> None:
             )[0]
             legend_handles.setdefault(method, handle)
 
-        ax.set_title(_format_family_title(family), pad=6)
+        ax.set_title(TITLE_FAMILIES.get(family, family), pad=6)
         ax.set_yscale("log")
         ax.set_xticks(sizes)
         ax.set_xticklabels([str(size) for size in sizes])
-        ax.set_xlabel(size_axis_label(family))
+        ax.set_xlabel(X_AXIS_LABELS.get(family, family))
         ax.grid(True, which="major", axis="x", alpha=0.18)
         ax.grid(True, which="major", axis="y", alpha=0.25)
         ax.grid(True, which="minor", axis="y", alpha=0.12)
