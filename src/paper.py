@@ -65,11 +65,11 @@ X_AXIS_LABELS = {
 METHODS = ["cvxpy_direct", "cgr_python", "cvxpygen", "cgr_rust", "cvxpygen_c"]
 
 METHOD_LABELS = {
-    "cvxpy_direct": r"\texttt{CVXPY}",
+    "cvxpy_direct": r"CVXPY",
     "cgr_python": r"\texttt{cvxgenrust} (Python)",
-    "cvxpygen": r"\texttt{CVXPYgen} (Python)",
+    "cvxpygen": r"CVXPYgen (Python)",
     "cgr_rust": r"\texttt{cvxgenrust} (Rust)",
-    "cvxpygen_c": r"\texttt{CVXPYgen} (C)",
+    "cvxpygen_c": r"CVXPYgen (C)",
 }
 
 METHOD_STYLES = {
@@ -105,10 +105,10 @@ def _successful_rows(frame: pd.DataFrame) -> pd.DataFrame:
 def _summarize_solve_times(frame: pd.DataFrame) -> pd.DataFrame:
     summary = (
         frame.groupby(["problem_family", "size", "size_label", "tool"], dropna=False)["seconds"]
-        .agg(mean_seconds="mean")
+        .agg(median_seconds="median")
         .reset_index()
     )
-    summary["mean_ms"] = 1_000.0 * summary["mean_seconds"]
+    summary["median_ms"] = 1_000.0 * summary["median_seconds"]
     return summary
 
 
@@ -133,7 +133,7 @@ def _plot_solve_times(result_df: pd.DataFrame, path: Path) -> None:
 
             handle = ax.plot(
                 method_df["size"],
-                method_df["mean_ms"],
+                method_df["median_ms"],
                 linewidth=1.5,
                 markersize=4,
                 label=METHOD_LABELS[method],
@@ -165,5 +165,5 @@ def _plot_solve_times(result_df: pd.DataFrame, path: Path) -> None:
 
 
 if __name__ == "__main__":
-    result_df = pd.read_csv("./results/solve_times.csv")
+    result_df = pd.read_csv("./results/solve_times.csv", low_memory=False)
     _plot_solve_times(result_df, Path("./results/plots/solve_times.pdf"))
