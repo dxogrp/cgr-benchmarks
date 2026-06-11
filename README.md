@@ -1,6 +1,6 @@
 # cvxgenrust Benchmarks
 
-This reository contains the code for reproducing the numerical results in the paper "Generation of custom solvers in Rust for convex optimization".
+This reository contains the code for reproducing the numerical results in the paper "[Generation of custom solvers in Rust for convex optimization](https://haozhu10015.github.io/papers/cvxgenrust.html)".
 
 ## Dependencies
 
