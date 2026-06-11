@@ -1,6 +1,6 @@
 [benchmark]
 warmups = 3
-samples = 30
+samples = 1000
 seed = 10015
 enabled_problems = [
   "nnls_tiny",
